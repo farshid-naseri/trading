@@ -1,0 +1,132 @@
+/* استایل‌های بهبود یافته برای نمودار کندلی */
+
+.apexcharts-candlestick-series .apexcharts-series {
+  transition: none !important;
+}
+
+.apexcharts-candlestick {
+  stroke-width: 1;
+}
+
+.apexcharts-candlestick-series .apexcharts-candles {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* بهبود فاصله بین کندل‌ها */
+.apexcharts-xaxis-tick {
+  stroke-width: 1;
+}
+
+.apexcharts-gridline {
+  stroke-dasharray: 2, 2;
+}
+
+/* بهبود تولتیپ */
+.apexcharts-tooltip-candlestick {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  min-width: 180px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.apexcharts-tooltip-candlestick .font-bold {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #1f2937;
+}
+
+.apexcharts-tooltip-candlestick .flex {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.apexcharts-tooltip-candlestick span {
+  font-size: 11px;
+}
+
+.apexcharts-tooltip-candlestick .text-gray-600 {
+  color: #6b7280;
+}
+
+.apexcharts-tooltip-candlestick .font-semibold {
+  font-weight: 500;
+}
+
+.apexcharts-tooltip-candlestick .text-green-600 {
+  color: #059669;
+}
+
+.apexcharts-tooltip-candlestick .text-red-600 {
+  color: #dc2626;
+}
+
+.apexcharts-tooltip-candlestick .text-blue-600 {
+  color: #2563eb;
+}
+
+.apexcharts-tooltip-candlestick .text-purple-600 {
+  color: #9333ea;
+}
+
+/* بهبود نمایش کندل‌ها */
+.apexcharts-candlestick-series .apexcharts-candlestick-area {
+  fill-opacity: 0.8;
+}
+
+/* بهبود نمایش شبکه */
+.apexcharts-grid-borders {
+  stroke: #e5e7eb;
+  stroke-width: 0.5;
+}
+
+/* بهبود نمایش محورها */
+.apexcharts-xaxis-label,
+.apexcharts-yaxis-label {
+  font-size: 11px;
+  fill: #6b7280;
+}
+
+/* بهبود نمایش عنوان */
+.apexcharts-title-text {
+  font-weight: 600;
+  fill: #1f2937;
+}
+
+/* بهبود نمایش ابزارها */
+.apexcharts-toolbar {
+  background: transparent !important;
+  border: none !important;
+}
+
+.apexcharts-toolbar svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+/* بهبود نمایش کراس‌هیر */
+.apexcharts-xaxistooltip,
+.apexcharts-yaxistooltip {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 4px !important;
+  font-size: 11px !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.apexcharts-xaxistooltip-text,
+.apexcharts-yaxistooltip-text {
+  color: #1f2937 !important;
+  font-weight: 500 !important;
+}
+
+/* بهبود نمایش انتخاب */
+.apexcharts-selection-rect {
+  fill: rgba(59, 130, 246, 0.1) !important;
+  stroke: #3b82f6 !important;
+  stroke-width: 1 !important;
+  stroke-dasharray: 4, 4 !important;
+}
