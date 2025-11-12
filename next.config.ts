@@ -7,9 +7,9 @@ const nextConfig: NextConfig = {
   },
   // رفع خطای Cross Origin برای پیش‌نمایش آنلاین
   allowedDevOrigins: [
-    'https://preview-chat-369333ac-a226-46d7-9909-e4d5e40e2cca.space.z.ai'
+    'https://preview-chat-*.space.z.ai'
   ],
-  // 禁用 Next.js 热重载，由 nodemon 处理重编译
+  // 禁用 Next.js 热重载،由 nodemon 处理重编译
   reactStrictMode: false,
   webpack: (config, { dev }) => {
     if (dev) {

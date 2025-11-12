@@ -490,6 +490,11 @@ export function TradingDashboard({ initialConfig }: TradingDashboardProps) {
     }
   };
 
+  // تابع ساده برای لاگ‌گیری از اتفاقات استراتژی
+  const addAutoTradeLog = (message: string) => {
+    console.log(`🤖 AutoTrade: ${message}`);
+  };
+
   // تابع اجرای معامله برای سیگنال‌های استراتژی
   const executeStrategyTrade = async (params: {
     symbol: string;
@@ -503,7 +508,30 @@ export function TradingDashboard({ initialConfig }: TradingDashboardProps) {
     enableStopLoss?: boolean;
   }) => {
     try {
-      // تنظیم فرم معامله دستی با پارامترهای استراتژی
+      addAutoTradeLog(`🎯 Executing strategy trade: ${params.side.toUpperCase()} for ${params.symbol}`);
+      
+      // مرحله 1: بررسی و بستن پوزیشن‌های مخالف قبلی
+      const oppositeSide = params.side === 'buy' ? 'sell' : 'buy';
+      const openPositions = positions.filter(p => p.status === 'open' && p.symbol === params.symbol);
+      const oppositePositions = openPositions.filter(p => p.type === oppositeSide);
+      
+      if (oppositePositions.length > 0) {
+        addAutoTradeLog(`🔄 Found ${oppositePositions.length} opposite ${oppositeSide} position(s) - closing them first`);
+        
+        for (const position of oppositePositions) {
+          try {
+            addAutoTradeLog(`🔄 Closing opposite position: ${position.id} (${position.type})`);
+            await closePosition(position.id);
+            addAutoTradeLog(`✅ Opposite position ${position.id} closed successfully`);
+          } catch (closeError) {
+            const closeErrorMessage = closeError instanceof Error ? closeError.message : 'Unknown error';
+            addAutoTradeLog(`⚠️ Failed to close opposite position ${position.id}: ${closeErrorMessage}`);
+            console.error(`Error closing opposite position:`, closeError);
+          }
+        }
+      }
+      
+      // مرحله 2: تنظیم فرم معامله دستی با پارامترهای استراتژی
       setManualTradeForm(prev => ({
         ...prev,
         symbol: params.symbol,
@@ -517,13 +545,15 @@ export function TradingDashboard({ initialConfig }: TradingDashboardProps) {
         type: 'market' // همیشه از نوع مارکت برای استراتژی
       }));
 
-      // اجرای معامله با ساید مشخص شده
+      // مرحله 3: اجرای معامله با ساید مشخص شده
       await executeTradeWithSide(params.side);
       
+      addAutoTradeLog(`✅ Strategy trade executed successfully: ${params.side.toUpperCase()} position opened`);
       return { success: true, message: 'Strategy trade executed successfully' };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Strategy trade execution error:', error);
+      addAutoTradeLog(`❌ Strategy trade execution failed: ${errorMessage}`);
       return { success: false, message: errorMessage };
     }
   };

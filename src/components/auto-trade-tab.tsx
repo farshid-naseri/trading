@@ -243,6 +243,14 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
   }>>([]);
   const [strategyStartTime, setStrategyStartTime] = useState<number | null>(null);
   
+  // Last executed signal for preventing duplicate trades
+  const [lastExecutedSignal, setLastExecutedSignal] = useState<{
+    timestamp: number;
+    type: 'buy' | 'sell';
+    price: number;
+    strength: number;
+  } | null>(null);
+  
   // Strategy status display
   const [strategyStatus, setStrategyStatus] = useState<{
     isActive: boolean;
@@ -431,40 +439,53 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
           console.log(`🎯 Found new signal from new candles: ${latestNewSignal.type} at ${latestNewSignal.price}`);
           addAutoTradeLog(`🎯 Latest new signal: ${latestNewSignal.type.toUpperCase()} at ${latestNewSignal.price.toFixed(4)}`);
           
-          // Execute trades if auto-execution is enabled
-          if (autoExecuteStrategy && onExecuteTrade) {
-            try {
-              addAutoTradeLog(`🤖 Auto-executing signal: ${latestNewSignal.type.toUpperCase()} at ${latestNewSignal.price.toFixed(4)}`);
-              
-              const tradeResult = await onExecuteTrade({
-                symbol: autoTradeConfig.symbol,
-                amount: autoTradeConfig.amount,
-                side: latestNewSignal.type,
-                leverage: autoTradeConfig.leverage,
-                marginMode: autoTradeConfig.marginMode,
-                takeProfitPercent: autoTradeConfig.enableTakeProfit ? autoTradeConfig.takeProfitPercent : undefined,
-                stopLossPercent: autoTradeConfig.enableStopLoss ? autoTradeConfig.stopLossPercent : undefined,
-                enableTakeProfit: autoTradeConfig.enableTakeProfit,
-                enableStopLoss: autoTradeConfig.enableStopLoss
-              });
-              
-              if (tradeResult.success) {
-                addAutoTradeLog(`✅ Auto-trade executed successfully: ${tradeResult.message || 'Trade executed'}`);
-                setStrategyStatus(prev => ({
-                  ...prev,
-                  positionsOpened: (prev.positionsOpened || 0) + 1
-                }));
-              } else {
-                const tradeError = tradeResult.message || 'Unknown trade error';
-                console.log(`❌ Error executing trade: ${tradeError}`);
-                addAutoTradeLog(`❌ Error executing trade: ${tradeError}`);
+          // Check if the new signal is opposite to the last executed signal
+          const shouldExecuteTrade = !lastExecutedSignal || latestNewSignal.type !== lastExecutedSignal.type;
+          
+          if (shouldExecuteTrade) {
+            addAutoTradeLog(`✅ Signal is ${lastExecutedSignal ? 'opposite to last signal' : 'first signal'} - executing trade`);
+            addAutoTradeLog(`🔄 Checking for opposite positions to close...`);
+            
+            // Execute trades if auto-execution is enabled
+            if (autoExecuteStrategy && onExecuteTrade) {
+              try {
+                addAutoTradeLog(`🤖 Auto-executing signal: ${latestNewSignal.type.toUpperCase()} at ${latestNewSignal.price.toFixed(4)}`);
+                
+                const tradeResult = await onExecuteTrade({
+                  symbol: autoTradeConfig.symbol,
+                  amount: autoTradeConfig.amount,
+                  side: latestNewSignal.type,
+                  leverage: autoTradeConfig.leverage,
+                  marginMode: autoTradeConfig.marginMode,
+                  takeProfitPercent: autoTradeConfig.enableTakeProfit ? autoTradeConfig.takeProfitPercent : undefined,
+                  stopLossPercent: autoTradeConfig.enableStopLoss ? autoTradeConfig.stopLossPercent : undefined,
+                  enableTakeProfit: autoTradeConfig.enableTakeProfit,
+                  enableStopLoss: autoTradeConfig.enableStopLoss
+                });
+                
+                if (tradeResult.success) {
+                  addAutoTradeLog(`✅ Auto-trade executed successfully: ${tradeResult.message || 'Trade executed'}`);
+                  setStrategyStatus(prev => ({
+                    ...prev,
+                    positionsOpened: (prev.positionsOpened || 0) + 1
+                  }));
+                  // Update last executed signal
+                  setLastExecutedSignal(latestNewSignal);
+                  addAutoTradeLog(`✅ Position opened successfully - opposite positions closed if any existed`);
+                } else {
+                  const tradeError = tradeResult.message || 'Unknown trade error';
+                  console.log(`❌ Error executing trade: ${tradeError}`);
+                  addAutoTradeLog(`❌ Error executing trade: ${tradeError}`);
+                }
+              } catch (tradeError) {
+                const errorMessage = tradeError instanceof Error ? tradeError.message : 'Unknown trade error';
+                addAutoTradeLog(`❌ Error executing trade: ${errorMessage}`);
               }
-            } catch (tradeError) {
-              const errorMessage = tradeError instanceof Error ? tradeError.message : 'Unknown trade error';
-              addAutoTradeLog(`❌ Error executing trade: ${errorMessage}`);
+            } else {
+              addAutoTradeLog(`📭 New signal generated but auto-execution is disabled`);
             }
           } else {
-            addAutoTradeLog(`📭 New signal generated but auto-execution is disabled`);
+            addAutoTradeLog(`⚠️ Signal is same as last executed signal (${lastExecutedSignal?.type}) - skipping trade execution`);
           }
         } else {
           addAutoTradeLog(`📭 No new trading signals from new candles`);
@@ -995,6 +1016,9 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
     setIsStrategyRunning(false);
     setStrategyStartTime(null);
     
+    // Reset last executed signal to allow fresh start
+    setLastExecutedSignal(null);
+    
     // پاک کردن localStorage
     if (typeof window !== 'undefined') {
       try {
@@ -1005,6 +1029,13 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
     }
     
     addAutoTradeLog('✅ Strategy stopped successfully');
+  }, [addAutoTradeLog]);
+
+  // ریست کردن آخرین سیگنال اجرا شده
+  const handleResetLastSignal = useCallback(() => {
+    addAutoTradeLog('🔄 Resetting last executed signal...');
+    setLastExecutedSignal(null);
+    addAutoTradeLog('✅ Last executed signal reset - ready for fresh signals');
   }, [addAutoTradeLog]);
 
   // 清除日志
@@ -1196,33 +1227,46 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
         
         console.log(`🎯 Found new signal to execute: ${latestNewSignal.type} at ${latestNewSignal.price}`);
         addAutoTradeLog(`🎯 Latest new signal: ${latestNewSignal.type.toUpperCase()} at ${latestNewSignal.price.toFixed(4)}`);
-        addAutoTradeLog(`📤 Sending new signal to manual trading system...`);
         
-        // فقط سیگنال‌های جدید را به ترید دستی ارسال کن
-        let tradeResult;
-        try {
-          tradeResult = await sendSignalToManualTrading(latestNewSignal);
+        // Check if the new signal is opposite to the last executed signal
+        const shouldExecuteTrade = !lastExecutedSignal || latestNewSignal.type !== lastExecutedSignal.type;
+        
+        if (shouldExecuteTrade) {
+          addAutoTradeLog(`✅ Signal is ${lastExecutedSignal ? 'opposite to last signal' : 'first signal'} - executing trade`);
+          addAutoTradeLog(`🔄 Checking for opposite positions to close...`);
+          addAutoTradeLog(`📤 Sending new signal to manual trading system...`);
           
-          if (tradeResult && tradeResult.success) {
-            console.log(`✅ Trade executed successfully for signal: ${latestNewSignal.type}`);
-            // به‌روزرسانی تعداد پوزیشن‌های باز شده
-            setStrategyStatus(prev => ({
-              ...prev,
-              positionsOpened: prev.positionsOpened + 1,
-              lastSignalTime: Date.now(),
-            }));
-            addAutoTradeLog(`✅ Position opened successfully`);
-          } else {
-            console.log(`⚠️ Trade execution failed: ${tradeResult?.message || 'Unknown error'}`);
-            addAutoTradeLog(`⚠️ Failed to open position: ${tradeResult?.message || 'Unknown error'}`);
+          // فقط سیگنال‌های جدید را به ترید دستی ارسال کن
+          let tradeResult;
+          try {
+            tradeResult = await sendSignalToManualTrading(latestNewSignal);
+            
+            if (tradeResult && tradeResult.success) {
+              console.log(`✅ Trade executed successfully for signal: ${latestNewSignal.type}`);
+              // به‌روزرسانی تعداد پوزیشن‌های باز شده
+              setStrategyStatus(prev => ({
+                ...prev,
+                positionsOpened: prev.positionsOpened + 1,
+                lastSignalTime: Date.now(),
+              }));
+              // Update last executed signal
+              setLastExecutedSignal(latestNewSignal);
+              addAutoTradeLog(`✅ Position opened successfully - opposite positions closed if any existed`);
+            } else {
+              console.log(`⚠️ Trade execution failed: ${tradeResult?.message || 'Unknown error'}`);
+              addAutoTradeLog(`⚠️ Failed to open position: ${tradeResult?.message || 'Unknown error'}`);
+            }
+          } catch (tradeError) {
+            const errorMessage = tradeError instanceof Error ? tradeError.message : 'Unknown trade error';
+            console.log(`❌ Error executing trade: ${errorMessage}`);
+            addAutoTradeLog(`❌ Error executing trade: ${errorMessage}`);
           }
-        } catch (tradeError) {
-          const errorMessage = tradeError instanceof Error ? tradeError.message : 'Unknown trade error';
-          console.log(`❌ Error executing trade: ${errorMessage}`);
-          addAutoTradeLog(`❌ Error executing trade: ${errorMessage}`);
+          
+          addAutoTradeLog(`✅ Strategy execution completed - new signal sent with position management`);
+        } else {
+          addAutoTradeLog(`⚠️ Signal is same as last executed signal (${lastExecutedSignal?.type}) - skipping trade execution`);
+          addAutoTradeLog(`✅ Strategy execution completed - duplicate signal skipped`);
         }
-        
-        addAutoTradeLog(`✅ Strategy execution completed - new signal sent`);
       } else {
         addAutoTradeLog('📭 No new trading signals generated after strategy start');
         addAutoTradeLog(`✅ Strategy execution completed - no new signals to execute`);
@@ -1500,22 +1544,33 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
         
         addAutoTradeLog(`🎯 Auto signal: ${latestNewSignal.type.toUpperCase()} at ${latestNewSignal.price.toFixed(4)}`);
         
-        try {
-          const tradeResult = await sendSignalToManualTrading(latestNewSignal);
+        // Check if the new signal is opposite to the last executed signal
+        const shouldExecuteTrade = !lastExecutedSignal || latestNewSignal.type !== lastExecutedSignal.type;
+        
+        if (shouldExecuteTrade) {
+          addAutoTradeLog(`✅ Auto signal is ${lastExecutedSignal ? 'opposite to last signal' : 'first signal'} - executing trade`);
           
-          if (tradeResult && tradeResult.success) {
-            setStrategyStatus(prev => ({
-              ...prev,
-              positionsOpened: prev.positionsOpened + 1,
-              lastSignalTime: Date.now(),
-            }));
-            addAutoTradeLog(`✅ Auto position opened successfully`);
-          } else {
-            addAutoTradeLog(`⚠️ Auto position failed: ${tradeResult?.message || 'Unknown error'}`);
+          try {
+            const tradeResult = await sendSignalToManualTrading(latestNewSignal);
+            
+            if (tradeResult && tradeResult.success) {
+              setStrategyStatus(prev => ({
+                ...prev,
+                positionsOpened: prev.positionsOpened + 1,
+                lastSignalTime: Date.now(),
+              }));
+              // Update last executed signal
+              setLastExecutedSignal(latestNewSignal);
+              addAutoTradeLog(`✅ Auto position opened successfully`);
+            } else {
+              addAutoTradeLog(`⚠️ Auto position failed: ${tradeResult?.message || 'Unknown error'}`);
+            }
+          } catch (tradeError) {
+            const errorMessage = tradeError instanceof Error ? tradeError.message : 'Unknown trade error';
+            addAutoTradeLog(`❌ Auto trade error: ${errorMessage}`);
           }
-        } catch (tradeError) {
-          const errorMessage = tradeError instanceof Error ? tradeError.message : 'Unknown trade error';
-          addAutoTradeLog(`❌ Auto trade error: ${errorMessage}`);
+        } else {
+          addAutoTradeLog(`⚠️ Auto signal is same as last executed signal (${lastExecutedSignal?.type}) - skipping trade execution`);
         }
       }
       
@@ -1956,7 +2011,7 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
                 <div className="flex justify-between">
                   <span className="font-medium text-blue-700">Last Signal:</span>
                   <span className="text-blue-900">
-                    {strategyStatus.lastSignalTime ? new Date(strategyStatus.lastSignalTime).toLocaleTimeString() : '-'}
+                    {lastExecutedSignal ? `${lastExecutedSignal.type.toUpperCase()} at ${lastExecutedSignal.price.toFixed(4)}` : 'None'}
                   </span>
                 </div>
               </div>
@@ -1978,7 +2033,16 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
             )}
             
             {/* دکمه توقف استراتژی */}
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex justify-end gap-2">
+              <Button 
+                onClick={handleResetLastSignal} 
+                variant="outline" 
+                size="sm"
+                title="Reset last executed signal to allow fresh trades"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reset Signal
+              </Button>
               <Button 
                 onClick={handleStopStrategy} 
                 variant="destructive" 

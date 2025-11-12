@@ -73,17 +73,10 @@ export function useInitializeApiConfig() {
       })
       
       // Initialize trading engine config
-      import('@/lib/trading-engine').then(({ useTradingEngineStore }) => {
-        const tradingEngine = useTradingEngineStore.getState()
-        if (tradingEngine.setConfig) {
-          tradingEngine.setConfig({
-            apiKey,
-            apiSecret,
-            baseUrl: 'https://api.coinex.com',
-            futuresBaseUrl: 'https://api.coinex.com',
-            useProxy: true
-          })
-        }
+      import('@/lib/trading-engine').then(({ TradingEngine }) => {
+        // TradingEngine is a class, not a Zustand store
+        // We'll let the trading-dashboard handle the engine initialization
+        console.log('TradingEngine class imported successfully');
       })
     }
   }, [isConfigured, getCredentials])
