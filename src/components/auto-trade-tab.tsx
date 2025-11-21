@@ -140,8 +140,19 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
     params: StrategyParam[];
   }>>([]);
 
-  // Auto-execution state - moved up to be used in useEffect
-  const [autoExecuteStrategy, setAutoExecuteStrategy] = useState(false);
+  // Auto-execution state - persist in localStorage
+  const [autoExecuteStrategy, setAutoExecuteStrategy] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('autoExecuteStrategy');
+        return saved ? JSON.parse(saved) : false;
+      } catch (error) {
+        console.error('Error loading auto execute strategy from localStorage:', error);
+        return false;
+      }
+    }
+    return false;
+  });
   const [lastExecutionTime, setLastExecutionTime] = useState<number | null>(null);
 
   // Dedicated auto trade logs - persist in localStorage
@@ -232,6 +243,17 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
       }
     }
   }, [autoTradeLogs]);
+
+  // Save auto execute strategy to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('autoExecuteStrategy', JSON.stringify(autoExecuteStrategy));
+      } catch (error) {
+        console.error('Error saving auto execute strategy to localStorage:', error);
+      }
+    }
+  }, [autoExecuteStrategy]);
 
   // Strategy execution state
   const [isStrategyRunning, setIsStrategyRunning] = useState(false);
@@ -423,12 +445,8 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
         
         addAutoTradeLog(`📊 Total signals: ${result.signals.length}, New signals after start: ${newSignals.length}`);
 
-        // Update signals count
-        setStrategyStatus(prev => ({
-          ...prev,
-          signalsCount: (prev.signalsCount || 0) + newSignals.length,
-          lastSignalTime: newSignals.length > 0 ? Math.max(...newSignals.map(s => s.timestamp)) : prev.lastSignalTime
-        }));
+        // Update signals count - only count when a trade is actually executed
+        // The actual signals count will be updated when a trade is executed successfully
 
         // Store signals
         setStrategySignals(result.signals);
@@ -467,7 +485,9 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
                   addAutoTradeLog(`✅ Auto-trade executed successfully: ${tradeResult.message || 'Trade executed'}`);
                   setStrategyStatus(prev => ({
                     ...prev,
-                    positionsOpened: (prev.positionsOpened || 0) + 1
+                    positionsOpened: (prev.positionsOpened || 0) + 1,
+                    signalsCount: (prev.signalsCount || 0) + 1,
+                    lastSignalTime: newSignals.length > 0 ? Math.max(...newSignals.map(s => s.timestamp)) : prev.lastSignalTime
                   }));
                   // Update last executed signal
                   setLastExecutedSignal(latestNewSignal);
@@ -1013,6 +1033,10 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
       lastSignalTime: null,
     }));
     
+    // Auto-disable auto execution when strategy stops
+    setAutoExecuteStrategy(false);
+    addAutoTradeLog('🛑 Auto execution disabled automatically');
+    
     setIsStrategyRunning(false);
     setStrategyStartTime(null);
     
@@ -1088,6 +1112,10 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
       console.log('📝 New strategy status:', newStatus);
       return newStatus;
     });
+    
+    // Auto-enable auto execution when strategy starts
+    setAutoExecuteStrategy(true);
+    addAutoTradeLog('🤖 Auto execution enabled automatically');
     
     // نمایش اطلاعات استراتژی برای کاربر
     addAutoTradeLog('🚀 Starting strategy execution...');
@@ -1213,11 +1241,7 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
       
       addAutoTradeLog(`📊 Total signals: ${result.signals.length}, New signals after start: ${newSignals.length}`);
 
-      // به‌روزرسانی تعداد سیگنال‌ها
-      setStrategyStatus(prev => ({
-        ...prev,
-        signalsCount: newSignals.length,
-      }));
+      // Don't update signals count here - it will be updated when trades are actually executed
 
       // Store signals and send only new signals to manual trading
       setStrategySignals(result.signals);
@@ -1247,6 +1271,7 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
               setStrategyStatus(prev => ({
                 ...prev,
                 positionsOpened: prev.positionsOpened + 1,
+                signalsCount: prev.signalsCount + 1,
                 lastSignalTime: Date.now(),
               }));
               // Update last executed signal
@@ -1532,11 +1557,7 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
       // Update strategy signals
       setStrategySignals(result.signals);
       
-      // Update strategy status
-      setStrategyStatus(prev => ({
-        ...prev,
-        signalsCount: newSignals.length,
-      }));
+      // Don't update signals count here - it will be updated when trades are actually executed
 
       // Execute latest new signal if available
       if (newSignals.length > 0) {
@@ -1557,6 +1578,7 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
               setStrategyStatus(prev => ({
                 ...prev,
                 positionsOpened: prev.positionsOpened + 1,
+                signalsCount: prev.signalsCount + 1,
                 lastSignalTime: Date.now(),
               }));
               // Update last executed signal
@@ -1582,22 +1604,6 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
       console.error('Auto strategy error:', error);
     }
   }, [strategyConfig, autoTradeConfig, strategyConfigs, autoTradeEngine, strategyStatus.startTime, addAutoTradeLog, apiConfig]);
-
-  // Toggle auto execution
-  const toggleAutoExecution = useCallback(() => {
-    const newState = !autoExecuteStrategy;
-    setAutoExecuteStrategy(newState);
-    
-    if (newState) {
-      addAutoTradeLog('🤖 Auto strategy execution enabled');
-      // Execute immediately if we have candles
-      if (candles && candles.length >= 2) {
-        executeAutoStrategy();
-      }
-    } else {
-      addAutoTradeLog('🛑 Auto strategy execution disabled');
-    }
-  }, [autoExecuteStrategy, addAutoTradeLog, candles, executeAutoStrategy]);
 
   // Get market信息和当前价格
   const fetchMarketInfo = async (symbol: string) => {
@@ -1922,25 +1928,6 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
               <AlertTriangle className="w-4 h-4 ml-2 text-blue-500" />
             )}
           </Button>
-          
-          <Button 
-            onClick={toggleAutoExecution} 
-            variant={autoExecuteStrategy ? "default" : "outline"} 
-            size="sm"
-            title={autoExecuteStrategy ? "Disable auto execution" : "Enable auto execution on new candles"}
-          >
-            {autoExecuteStrategy ? (
-              <>
-                <Activity className="w-4 h-4 mr-2" />
-                Auto: ON
-              </>
-            ) : (
-              <>
-                <Activity className="w-4 h-4 mr-2" />
-                Auto: OFF
-              </>
-            )}
-          </Button>
         </div>
       </div>
 
@@ -2001,7 +1988,7 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-medium text-blue-700">Signals Count:</span>
+                  <span className="font-medium text-blue-700">Executed Signals:</span>
                   <span className="text-blue-900">{strategyStatus.signalsCount}</span>
                 </div>
                 <div className="flex justify-between">
@@ -2542,24 +2529,6 @@ export function AutoTradeTab({ isConnected: propIsConnected, isInitialized: prop
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-4 rounded-lg border">
-                  <div className="space-y-1">
-                    <p className="font-medium">Auto Execution</p>
-                    <p className="text-sm text-muted-foreground">
-                      {autoExecuteStrategy 
-                        ? "Strategy will execute automatically when new candles close" 
-                        : "Strategy requires manual execution"}
-                    </p>
-                  </div>
-                  <Button 
-                    onClick={toggleAutoExecution}
-                    variant={autoExecuteStrategy ? "default" : "outline"}
-                    size="sm"
-                  >
-                    {autoExecuteStrategy ? "Disable" : "Enable"}
-                  </Button>
-                </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-3 rounded-lg bg-muted">
                     <p className="text-sm font-medium">Strategy Status</p>
